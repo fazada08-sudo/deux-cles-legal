@@ -1,0 +1,41 @@
+# Deux Clés — maintien en éveil du projet Supabase gratuit (un projet gratuit se met en pause après 7 jours sans requête).
+# À poser dans un dépôt GitHub (par exemple le dépôt « deux-cles-legal » des pages légales), au chemin EXACT :
+#   .github/workflows/reveil-supabase.yml
+# Secret de dépôt à créer (Settings › Secrets and variables › Actions › New repository secret) :
+#   SUPABASE_CLE_PUBLIQUE = la clé PUBLIQUE du projet (sb_publishable_…), jamais la clé secrète.
+#   CLE_RELECTURE (facultatif) = la même valeur que le secret CLE_RELECTURE du projet Supabase (MISE-EN-PLACE, « Relecture Google »).
+# Une fois par HEURE, un appel à la fonction SQL public.reveil() : il compte comme une activité (pas de mise en pause) et
+# lance l'effacement automatique (espaces jamais abonnés inactifs depuis 30 jours, comptes anonymes sans espace depuis
+# plus d'une heure). Il ne renvoie aucune donnée. Gratuit : GitHub Actions est gratuit pour un dépôt public.
+# Remarque GitHub : sur un dépôt public sans aucune activité pendant 60 jours, GitHub désactive les tâches planifiées et
+# prévient par email ; il suffit alors de cliquer « Enable workflow » dans l'onglet Actions.
+name: Réveil Supabase
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  reveil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: https://tfohdgoawpaigsuqdvwn.supabase.co
+    steps:
+      - name: Relecture chez Google avant tout effacement d'une ancienne famille payée (facultatif)
+        env:
+          CLE_RELECTURE: ${{ secrets.CLE_RELECTURE }}
+        run: |
+          # Sans le secret CLE_RELECTURE, cette étape ne fait rien : les familles payées sur Android ne sont alors jamais effacées.
+          if [ -z "$CLE_RELECTURE" ]; then echo "Pas de clé de relecture : étape sautée."; exit 0; fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "x-cle-relecture: $CLE_RELECTURE" \
+            -H "content-type: application/json" -d '{}' "$SUPABASE_URL/functions/v1/relecture-google")
+          echo "Relecture Google : $code"
+      - name: Requête légère vers la base
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H "apikey: ${{ secrets.SUPABASE_CLE_PUBLIQUE }}" -H "content-type: application/json" -d '{}' \
+            "$SUPABASE_URL/rest/v1/rpc/reveil")
+          echo "Réponse de Supabase : $code"
+          test "$code" = "200"
